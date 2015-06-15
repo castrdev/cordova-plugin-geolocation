@@ -34,11 +34,37 @@ xmlns:android="http://schemas.android.com/apk/res/android"
     <!-- android -->
     <platform name="android">
 
+		<dependency id="com.google.playservices@19.0.0"/>
+
+        <js-module src="www/Coordinates.js" name="Coordinates">
+            <clobbers target="Coordinates" />
+        </js-module>
+
+        <js-module src="www/PositionError.js" name="PositionError">
+            <clobbers target="PositionError" />
+        </js-module>
+
+        <js-module src="www/Position.js" name="Position">
+            <clobbers target="Position" />
+        </js-module>
+
+        <js-module src="www/geolocation.js" name="geolocation">
+            <clobbers target="navigator.geolocation" />
+        </js-module>
+
+		<config-file target="res/xml/config.xml" parent="/*">
+			<feature name="Geolocation">
+				<param name="android-package" value="com.castr.cordova.plugin.Geolocation"/>
+			</feature>
+		</config-file>
+
         <config-file target="AndroidManifest.xml" parent="/*">
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
             <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
         </config-file>
 
+		<source-file src="src/android/Geolocation.java" target-dir="src/com/castr/cordova/plugin"/>
+		
     </platform>
 
      <!-- amazon-fireos -->
