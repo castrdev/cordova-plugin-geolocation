@@ -17,9 +17,9 @@
 #         under the License.
 -->
 
-# cordova-plugin-geolocation
+TODO : watchPosition and clearWatch for native Android
 
-[![Build Status](https://travis-ci.org/apache/cordova-plugin-geolocation.svg)](https://travis-ci.org/apache/cordova-plugin-geolocation)
+# cordova-plugin-geolocation
 
 This plugin provides information about the device's location, such as
 latitude and longitude. Common sources of location information include
