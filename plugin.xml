@@ -34,8 +34,6 @@ xmlns:android="http://schemas.android.com/apk/res/android"
     <!-- android -->
     <platform name="android">
 
-		<dependency id="com.google.playservices@19.0.0"/>
-
         <js-module src="www/Coordinates.js" name="Coordinates">
             <clobbers target="Coordinates" />
         </js-module>
@@ -54,7 +52,7 @@ xmlns:android="http://schemas.android.com/apk/res/android"
 
 		<config-file target="res/xml/config.xml" parent="/*">
 			<feature name="Geolocation">
-				<param name="android-package" value="com.castr.cordova.plugin.Geolocation"/>
+				<param name="android-package" value="com.castr.cordova.plugin.Geolocation" />
 			</feature>
 		</config-file>
 
@@ -62,8 +60,10 @@ xmlns:android="http://schemas.android.com/apk/res/android"
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
             <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
         </config-file>
+        
+        <framework src="com.google.android.gms:play-services-location:7.5.0" />
 
-		<source-file src="src/android/Geolocation.java" target-dir="src/com/castr/cordova/plugin"/>
+        <source-file src="src/android/Geolocation.java" target-dir="src/com/castr/cordova/plugin" />
 		
     </platform>
 
