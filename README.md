@@ -17,7 +17,8 @@
 #         under the License.
 -->
 
-TODO : watchPosition and clearWatch for native Android
+TODO: use maximumAge and enableHighAccuracy options
+TODO: watchPosition and clearWatch for native Android
 
 # cordova-plugin-geolocation
 
