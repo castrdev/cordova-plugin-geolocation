@@ -60,11 +60,12 @@ xmlns:android="http://schemas.android.com/apk/res/android"
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
             <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
         </config-file>
-        
+
         <framework src="com.google.android.gms:play-services-location:7.5.0" />
 
         <source-file src="src/android/Geolocation.java" target-dir="src/com/castr/cordova/plugin" />
-		
+        <source-file src="src/android/BuiltInGeolocation.java" target-dir="src/com/castr/cordova/plugin" />
+
     </platform>
 
      <!-- amazon-fireos -->
@@ -74,9 +75,9 @@ xmlns:android="http://schemas.android.com/apk/res/android"
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
             <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
         </config-file>
-        
+
     </platform>
-    
+
     <!-- ios -->
     <platform name="ios">
 
@@ -104,11 +105,11 @@ xmlns:android="http://schemas.android.com/apk/res/android"
         <header-file src="src/ios/CDVLocation.h" />
         <source-file src="src/ios/CDVLocation.m" />
         <framework src="CoreLocation.framework" />
-        
+
         <config-file target="*-Info.plist" parent="NSLocationWhenInUseUsageDescription">
             <string></string>
         </config-file>
-        
+
     </platform>
 
     <!-- blackberry10 -->
@@ -244,7 +245,7 @@ xmlns:android="http://schemas.android.com/apk/res/android"
             <clobbers target="navigator.geolocation" />
         </js-module>
     </platform>
-    
+
     <!-- firefoxos -->
     <platform name="firefoxos">
       <config-file target="config.xml" parent="/*">

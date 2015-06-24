@@ -1,13 +1,12 @@
 package com.castr.cordova.plugin;
 
-import android.content.Context;
 import android.location.Location;
-import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationServices;
 
 import org.apache.cordova.CallbackContext;
@@ -16,7 +15,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by freddy on 05/06/15.
@@ -33,19 +33,19 @@ public class Geolocation extends CordovaPlugin implements
     private GoogleApiClient mGoogleApiClient;
 
     /**
-     * Built-in location manager.
+     * Used to wait for the Google play services to be connected.
      */
-    private LocationManager mLocationManager;
+    private CountDownLatch mGoogleApiConnection;
 
     /**
-     * Last known location.
+     * Built-in geolocation.
      */
-    private Location mLastLocation;
+    private BuiltInGeolocation mBuiltInGeolocation;
 
     /**
-     * Check if the Google api is connected.
+     * Check if Google play services are available.
      */
-    private volatile boolean mIsApiConnected;
+    private boolean mServiceAvailable;
 
 
     @Override
@@ -58,8 +58,9 @@ public class Geolocation extends CordovaPlugin implements
                     .addApi(LocationServices.API)
                     .build();
         }
+        mGoogleApiConnection = new CountDownLatch(1);
         mGoogleApiClient.connect();
-        mLocationManager = (LocationManager) cordova.getActivity().getSystemService(Context.LOCATION_SERVICE);
+        mBuiltInGeolocation = new BuiltInGeolocation(cordova.getActivity());
     }
 
     @Override
@@ -67,6 +68,7 @@ public class Geolocation extends CordovaPlugin implements
         final CallbackContext fCallbackContext = callbackContext;
 
         if ( ! mGoogleApiClient.isConnected() && ! mGoogleApiClient.isConnecting()) {
+            mGoogleApiConnection = new CountDownLatch(1);
             mGoogleApiClient.connect();
         }
 
@@ -76,49 +78,73 @@ public class Geolocation extends CordovaPlugin implements
                 @Override
                 public void run() {
 
-                    // crappy
-                    while ( !mIsApiConnected) {
-                        Log.i(TAG, "Waiting for services to connect.");
-                        try {
-                            Thread.sleep(250);
-                        } catch (InterruptedException e) {
-                            fCallbackContext.error(e.getMessage());
-                            e.printStackTrace();
-                        }
+                    // Wait for connection
+                    try {
+                        mGoogleApiConnection.await(3, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
 
-                    if (LocationServices.FusedLocationApi.getLocationAvailability(mGoogleApiClient).isLocationAvailable()) {
-                        // Get location from google
+                    mServiceAvailable = LocationServices.FusedLocationApi.getLocationAvailability(mGoogleApiClient).isLocationAvailable();
+                    Log.i(TAG, "Location available? " + String.valueOf(mServiceAvailable));
+
+                    if (mServiceAvailable && mGoogleApiClient.isConnected()) {
                         Log.i(TAG, "Getting location from Google services.");
-                        mLastLocation = LocationServices.FusedLocationApi.getLastLocation(
-                                mGoogleApiClient);
+                        getLocation(new LocationListener() {
+                            @Override
+                            public void onLocationChanged(Location location) {
+                                JSONObject position = new JSONObject();
+                                if (location != null) {
+                                    Log.i(TAG, "Location: " + location.toString());
+                                    try {
+                                        position.put("latitude", location.getLatitude());
+                                        position.put("longitude", location.getLongitude());
+                                    } catch (JSONException e) {
+                                        fCallbackContext.error(e.getMessage());
+                                        e.printStackTrace();
+                                    }
+                                    // Sending location to the webview
+                                    fCallbackContext.success(position);
+                                }
+                                else {
+                                    Log.i(TAG, "No known position.");
+                                    fCallbackContext.error("No known position.");
+                                }
+                            }
+                        });
                     }
                     else {
-                        // Test with built-in location API
-                        Log.i(TAG, "Getting location from location manager.");
-                        mLastLocation = getLastBestLocation();
+                        Log.i(TAG, "Getting location from built-in location.");
+                        mBuiltInGeolocation.getLocation(new BuiltInGeolocation.BuiltInLocationCallback() {
+                            @Override
+                            public void onSuccess(Location location) {
+                                JSONObject position = new JSONObject();
+                                if (location != null) {
+                                    Log.i(TAG, "Location: " + location.toString());
+                                    try {
+                                        position.put("latitude", location.getLatitude());
+                                        position.put("longitude", location.getLongitude());
+                                    } catch (JSONException e) {
+                                        fCallbackContext.error(e.getMessage());
+                                        e.printStackTrace();
+                                    }
+                                    // Sending location to the webview
+                                    fCallbackContext.success(position);
+                                }
+                                else {
+                                    Log.i(TAG, "No known position.");
+                                    fCallbackContext.error("No known position.");
+                                }
+
+
+                            }
+
+                            @Override
+                            public void onError(String message) {
+                                fCallbackContext.error(message);
+                            }
+                        });
                     }
-
-                    JSONObject position = new JSONObject();
-
-                    if (mLastLocation == null) {
-                        Log.i(TAG, "No last known positions.");
-                        fCallbackContext.error("No last known positions.");
-                    }
-                    else {
-                        try {
-                            Log.i(TAG, "Adding locations attributes to callback object.");
-                            position.put("latitude", mLastLocation.getLatitude());
-                            position.put("longitude", mLastLocation.getLongitude());
-                        } catch (JSONException e) {
-                            fCallbackContext.error(e.getMessage());
-                            e.printStackTrace();
-                        }
-
-                        // Sending location to the webview
-                        fCallbackContext.success(position);
-                    }
-
                 }
             });
 
@@ -138,7 +164,7 @@ public class Geolocation extends CordovaPlugin implements
     // -------------------------------------------------------------------------------------------
     @Override
     public void onConnected(Bundle bundle) {
-        mIsApiConnected = true;
+        mGoogleApiConnection.countDown();
     }
 
     @Override
@@ -162,33 +188,18 @@ public class Geolocation extends CordovaPlugin implements
     }
 
     // -------------------------------------------------------------------------------------------
-    // Built-in location service
+    // Google service location finder
     // -------------------------------------------------------------------------------------------
-    public Location getLastBestLocation() {
-        // int minDistance = mStationaryRadius;
-        // long minTime    = System.currentTimeMillis() - (mLocationTimeout * 1000);
+    public void getLocation(LocationListener listener) {
+        long minTime = System.currentTimeMillis() - (2 * 60 * 1000);
+        Location location = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
 
-        Location bestResult = null;
-        float bestAccuracy = Float.MAX_VALUE;
-        long bestTime = Long.MIN_VALUE;
-
-        // Iterate through all the providers on the system, keeping
-        // note of the most accurate result within the acceptable time limit.
-        // If no result is found within maxTime, return the newest Location.
-        List<String> matchingProviders = mLocationManager.getAllProviders();
-        for (String provider: matchingProviders) {
-            Location location = mLocationManager.getLastKnownLocation(provider);
-            if (location != null) {
-                float accuracy = location.getAccuracy();
-                long time = location.getTime();
-                if (accuracy < bestAccuracy) {
-                    Log.d(TAG, "Better provider: " + provider + " - location: " + location.getLatitude() + ", " + location.getLongitude() + ", " + location.getAccuracy() + ", " + location.getSpeed() + "m/s");
-                    bestResult = location;
-                    bestAccuracy = accuracy;
-                    bestTime = time;
-                }
-            }
+        if (location.getTime() >= minTime) {
+            listener.onLocationChanged(location);
+            return;
         }
-        return bestResult;
+
+        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, listener);
     }
+
 }
