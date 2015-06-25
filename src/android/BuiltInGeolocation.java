@@ -45,6 +45,7 @@ public class BuiltInGeolocation {
     // -------------------------------------------------------------------------------------------
     public void getLocation(final BuiltInLocationCallback callback) {
         // Check first last known positions
+        Log.v(TAG, "Checking last know positions.");
         Location lastBestLoc = getLastBestLocation();
         if (lastBestLoc != null) {
             Log.i(TAG, "Last location found.");
@@ -53,6 +54,7 @@ public class BuiltInGeolocation {
         }
 
         // Use an update otherwise
+        Log.v(TAG, "Requesting update.");
         Looper locLooper = Looper.getMainLooper();
 
         LocationListener locListener = new LocationListener() {
@@ -79,7 +81,11 @@ public class BuiltInGeolocation {
             Log.i(TAG, "Requesting new position from GPS.");
             mLocationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, locListener, locLooper);
         }
+        else if (mLocationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)) {
+            callback.onSuccess(mLocationManager.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER));
+        }
         else {
+            Log.i(TAG, "No provider enabled.");
             callback.onError("No provider enabled.");
         }
 

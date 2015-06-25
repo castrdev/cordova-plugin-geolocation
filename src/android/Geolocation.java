@@ -1,12 +1,16 @@
 package com.castr.cordova.plugin;
 
+import android.content.Intent;
 import android.location.Location;
 import android.os.Bundle;
+import android.os.Looper;
+import android.provider.Settings;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 
 import org.apache.cordova.CallbackContext;
@@ -65,6 +69,7 @@ public class Geolocation extends CordovaPlugin implements
 
     @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) throws JSONException {
+        // TODO use options and return error code
         final CallbackContext fCallbackContext = callbackContext;
 
         if ( ! mGoogleApiClient.isConnected() && ! mGoogleApiClient.isConnecting()) {
@@ -107,43 +112,16 @@ public class Geolocation extends CordovaPlugin implements
                                     fCallbackContext.success(position);
                                 }
                                 else {
-                                    Log.i(TAG, "No known position.");
-                                    fCallbackContext.error("No known position.");
+                                    getBuiltInLocation(fCallbackContext);
+//                                    Log.i(TAG, "No known position.");
+//                                    fCallbackContext.error("No known position.");
                                 }
+                                LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
                             }
                         });
                     }
                     else {
-                        Log.i(TAG, "Getting location from built-in location.");
-                        mBuiltInGeolocation.getLocation(new BuiltInGeolocation.BuiltInLocationCallback() {
-                            @Override
-                            public void onSuccess(Location location) {
-                                JSONObject position = new JSONObject();
-                                if (location != null) {
-                                    Log.i(TAG, "Location: " + location.toString());
-                                    try {
-                                        position.put("latitude", location.getLatitude());
-                                        position.put("longitude", location.getLongitude());
-                                    } catch (JSONException e) {
-                                        fCallbackContext.error(e.getMessage());
-                                        e.printStackTrace();
-                                    }
-                                    // Sending location to the webview
-                                    fCallbackContext.success(position);
-                                }
-                                else {
-                                    Log.i(TAG, "No known position.");
-                                    fCallbackContext.error("No known position.");
-                                }
-
-
-                            }
-
-                            @Override
-                            public void onError(String message) {
-                                fCallbackContext.error(message);
-                            }
-                        });
+                        getBuiltInLocation(fCallbackContext);
                     }
                 }
             });
@@ -194,12 +172,53 @@ public class Geolocation extends CordovaPlugin implements
         long minTime = System.currentTimeMillis() - (2 * 60 * 1000);
         Location location = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
 
-        if (location.getTime() >= minTime) {
+        if (location != null && location.getTime() >= minTime) {
             listener.onLocationChanged(location);
             return;
         }
+        LocationRequest req = new LocationRequest();
+        req.setMaxWaitTime(15 * 1000);
+        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, req, listener, Looper.getMainLooper());
 
-        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, listener);
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // Built-in location finder
+    // -------------------------------------------------------------------------------------------
+    public void getBuiltInLocation(final CallbackContext fCallbackContext) {
+        Log.i(TAG, "Getting location from built-in location.");
+        mBuiltInGeolocation.getLocation(new BuiltInGeolocation.BuiltInLocationCallback() {
+            @Override
+            public void onSuccess(Location location) {
+                JSONObject position = new JSONObject();
+                if (location != null) {
+                    Log.i(TAG, "Location: " + location.toString());
+                    try {
+                        position.put("latitude", location.getLatitude());
+                        position.put("longitude", location.getLongitude());
+                    } catch (JSONException e) {
+                        fCallbackContext.error(e.getMessage());
+                        e.printStackTrace();
+                    }
+                    // Sending location to the webview
+                    fCallbackContext.success(position);
+                }
+                else {
+                    Log.i(TAG, "No known position.");
+                    fCallbackContext.error("No known position.");
+                    // TODO : Prompt for gps
+//                    Intent gpsOptionsIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+//                    cordova.getActivity().startActivity(gpsOptionsIntent);
+                }
+
+
+            }
+
+            @Override
+            public void onError(String message) {
+                fCallbackContext.error(message);
+            }
+        });
     }
 
 }
