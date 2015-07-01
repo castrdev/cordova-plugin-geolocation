@@ -1,6 +1,7 @@
 package com.castr.cordova.plugin;
 
 import android.content.Context;
+import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -33,11 +34,20 @@ public class BuiltInGeolocation {
     private LocationListener mLocationListener;
 
     /**
+     * Plugin options
+     */
+    private boolean mHighAccuracyEnabled;
+    private long mMaximumAge;
+
+
+    /**
      * Basic constructor.
      * @param context A context for the {@link LocationManager}.
      */
     public BuiltInGeolocation(Context context) {
         mLocationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+        mHighAccuracyEnabled = true;
+        mMaximumAge = 60 * 1000;
     }
 
     // -------------------------------------------------------------------------------------------
@@ -45,7 +55,7 @@ public class BuiltInGeolocation {
     // -------------------------------------------------------------------------------------------
     public void getLocation(final BuiltInLocationCallback callback) {
         // Check first last known positions
-        Log.v(TAG, "Checking last know positions.");
+        Log.v(TAG, "Checking last known positions.");
         Location lastBestLoc = getLastBestLocation();
         if (lastBestLoc != null) {
             Log.i(TAG, "Last location found.");
@@ -73,6 +83,25 @@ public class BuiltInGeolocation {
             public void onProviderDisabled(String provider) {}
         };
 
+//        Criteria criteria = new Criteria();
+//        criteria.setPowerRequirement(Criteria.POWER_HIGH); // Chose your desired power consumption level.
+//        criteria.setAccuracy(Criteria.ACCURACY_HIGH); // Choose your accuracy requirement.
+//        criteria.setSpeedRequired(false); // Chose if speed for first location fix is required.
+//        criteria.setAltitudeRequired(false); // Choose if you use altitude.
+//        criteria.setBearingRequired(false); // Choose if you use bearing.
+//        criteria.setCostAllowed(true); // Choose if this provider can waste money :-)
+
+//        String provider = mLocationManager.getBestProvider(criteria, true);
+//        Log.i(TAG, "Requesting new position from " + provider);
+//
+//        if (provider != null) {
+//            mLocationManager.requestSingleUpdate(provider, locListener, locLooper);
+//        }
+//        else {
+//            Log.w(TAG, "No provider enabled.");
+//            callback.onError("No provider enabled.");
+//        }
+
         if (mLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
             Log.i(TAG, "Requesting new position from network.");
             mLocationManager.requestSingleUpdate(LocationManager.NETWORK_PROVIDER, locListener, locLooper);
@@ -85,7 +114,7 @@ public class BuiltInGeolocation {
             callback.onSuccess(mLocationManager.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER));
         }
         else {
-            Log.i(TAG, "No provider enabled.");
+            Log.w(TAG, "No provider enabled.");
             callback.onError("No provider enabled.");
         }
 
@@ -96,7 +125,7 @@ public class BuiltInGeolocation {
     // -------------------------------------------------------------------------------------------
     private Location getLastBestLocation() {
          int minDistance = 200;
-         long minTime = System.currentTimeMillis() - (2 * 60 * 1000);
+         long minTime = System.currentTimeMillis() - (mMaximumAge);
 
         return getLastBestLocation(minDistance, minTime);
     }
@@ -127,8 +156,9 @@ public class BuiltInGeolocation {
                     bestAccuracy = accuracy;
                     bestTime = time;
                 }
-                else if (time < minTime && bestAccuracy == Float.MAX_VALUE && time > bestTime) {
+                else if (time > minTime && bestAccuracy == Float.MAX_VALUE && time > bestTime) {
                     bestResult = location;
+                    bestAccuracy = accuracy;
                     bestTime = time;
                 }
             }
@@ -143,5 +173,24 @@ public class BuiltInGeolocation {
         }
 
         return bestResult;
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // Getters & Setters
+    // -------------------------------------------------------------------------------------------
+    public boolean isHighAccuracyEnable() {
+        return mHighAccuracyEnabled;
+    }
+
+    public void setHighAccuracyEnabled(boolean highAccuracyEnabled) {
+        this.mHighAccuracyEnabled = highAccuracyEnabled;
+    }
+
+    public long getMaximumAge() {
+        return mMaximumAge;
+    }
+
+    public void setMaximumAge(long mMaximumAge) {
+        this.mMaximumAge = mMaximumAge;
     }
 }

@@ -1,10 +1,8 @@
 package com.castr.cordova.plugin;
 
-import android.content.Intent;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Looper;
-import android.provider.Settings;
 import android.util.Log;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -51,6 +49,12 @@ public class Geolocation extends CordovaPlugin implements
      */
     private boolean mServiceAvailable;
 
+    /**
+     * Plugin options
+     */
+    private boolean mHighAccuracyEnabled;
+    private long mMaximumAge;
+
 
     @Override
     protected void pluginInitialize() {
@@ -69,7 +73,19 @@ public class Geolocation extends CordovaPlugin implements
 
     @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) throws JSONException {
-        // TODO use options and return error code
+
+        try {
+            mHighAccuracyEnabled = data.getBoolean(0);
+            mMaximumAge = data.getLong(1);
+        }
+        catch (Exception e) {
+            mHighAccuracyEnabled = true;
+            mMaximumAge = 60 * 1000;
+        }
+
+        Log.v(TAG, "high accuracy enabled? " + String.valueOf(mHighAccuracyEnabled) + ", maximum age? " + String.valueOf(mMaximumAge));
+
+        // TODO return correct error code
         final CallbackContext fCallbackContext = callbackContext;
 
         if ( ! mGoogleApiClient.isConnected() && ! mGoogleApiClient.isConnecting()) {
@@ -79,52 +95,53 @@ public class Geolocation extends CordovaPlugin implements
 
         if (action.equals("getLocation")) {
 
-            cordova.getThreadPool().execute(new Runnable() {
-                @Override
-                public void run() {
+            // Wait for connection
+            try {
+                mGoogleApiConnection.await(3, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
 
-                    // Wait for connection
-                    try {
-                        mGoogleApiConnection.await(3, TimeUnit.SECONDS);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+            mServiceAvailable = LocationServices.FusedLocationApi.getLocationAvailability(mGoogleApiClient).isLocationAvailable();
+            Log.i(TAG, "Location available? " + String.valueOf(mServiceAvailable));
 
-                    mServiceAvailable = LocationServices.FusedLocationApi.getLocationAvailability(mGoogleApiClient).isLocationAvailable();
-                    Log.i(TAG, "Location available? " + String.valueOf(mServiceAvailable));
-
-                    if (mServiceAvailable && mGoogleApiClient.isConnected()) {
-                        Log.i(TAG, "Getting location from Google services.");
-                        getLocation(new LocationListener() {
-                            @Override
-                            public void onLocationChanged(Location location) {
-                                JSONObject position = new JSONObject();
-                                if (location != null) {
-                                    Log.i(TAG, "Location: " + location.toString());
-                                    try {
-                                        position.put("latitude", location.getLatitude());
-                                        position.put("longitude", location.getLongitude());
-                                    } catch (JSONException e) {
-                                        fCallbackContext.error(e.getMessage());
-                                        e.printStackTrace();
-                                    }
-                                    // Sending location to the webview
-                                    fCallbackContext.success(position);
-                                }
-                                else {
-                                    getBuiltInLocation(fCallbackContext);
-//                                    Log.i(TAG, "No known position.");
-//                                    fCallbackContext.error("No known position.");
-                                }
-                                LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+            if (mServiceAvailable && mGoogleApiClient.isConnected()) {
+                Log.i(TAG, "Getting location from Google services.");
+                getLocation(new LocationListener() {
+                    @Override
+                    public void onLocationChanged(Location location) {
+                        JSONObject position = new JSONObject();
+                        if (location != null) {
+                            Log.d(TAG, "Location: " + location.toString());
+                            try {
+                                position.put("latitude", location.getLatitude());
+                                position.put("longitude", location.getLongitude());
+                            } catch (JSONException e) {
+                                fCallbackContext.error(e.getMessage());
+                                e.printStackTrace();
                             }
-                        });
+                            // Sending location to the webview
+                            fCallbackContext.success(position);
+                        }
+                        else {
+                            Log.w(TAG, "No known position.");
+                            fCallbackContext.error("No known position.");
+                        }
+                        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
                     }
-                    else {
-                        getBuiltInLocation(fCallbackContext);
-                    }
-                }
-            });
+                });
+            }
+            else {
+                getBuiltInLocation(fCallbackContext);
+            }
+
+//            cordova.getThreadPool().execute(new Runnable() {
+//                @Override
+//                public void run() {
+//
+//
+//                }
+//            });
 
             return true;
         } else {
@@ -153,7 +170,7 @@ public class Geolocation extends CordovaPlugin implements
     @Override
     public void onConnectionFailed(ConnectionResult result) {
         if (result.getErrorCode() == ConnectionResult.API_UNAVAILABLE) {
-            Log.i(TAG, "Location API is unavailable.");
+            Log.w(TAG, "Location API is unavailable.");
             return;
         }
         retryConnecting();
@@ -169,15 +186,28 @@ public class Geolocation extends CordovaPlugin implements
     // Google service location finder
     // -------------------------------------------------------------------------------------------
     public void getLocation(LocationListener listener) {
-        long minTime = System.currentTimeMillis() - (2 * 60 * 1000);
+        long minTime = System.currentTimeMillis() - (mMaximumAge);
         Location location = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
 
         if (location != null && location.getTime() >= minTime) {
+            Log.i(TAG, "Last known location is fresh enough.");
             listener.onLocationChanged(location);
             return;
         }
+
         LocationRequest req = new LocationRequest();
-        req.setMaxWaitTime(15 * 1000);
+        req.setInterval(0);
+        req.setNumUpdates(1);
+
+        if (mHighAccuracyEnabled) {
+            Log.i(TAG, "Requesting with high accuracy.");
+            req.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        }
+        else {
+            Log.i(TAG, "Requesting with balanced accuracy.");
+            req.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+        }
+
         LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, req, listener, Looper.getMainLooper());
 
     }
@@ -187,6 +217,8 @@ public class Geolocation extends CordovaPlugin implements
     // -------------------------------------------------------------------------------------------
     public void getBuiltInLocation(final CallbackContext fCallbackContext) {
         Log.i(TAG, "Getting location from built-in location.");
+        mBuiltInGeolocation.setHighAccuracyEnabled(mHighAccuracyEnabled);
+        mBuiltInGeolocation.setMaximumAge(mMaximumAge);
         mBuiltInGeolocation.getLocation(new BuiltInGeolocation.BuiltInLocationCallback() {
             @Override
             public void onSuccess(Location location) {
